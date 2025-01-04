@@ -2,84 +2,140 @@
 pragma solidity ^0.8.0;
 
 contract CharityTracker {
+    // Struct to store campaign details
+    struct Campaign {
+        string campaignId;
+        string title;
+        string description;
+        address organizer;
+        uint256 goalAmount;
+        uint256 raisedAmount;
+        uint256 startTime;
+        uint256 endTime;
+        bool completed;
+    }
+
     // Struct to store donation details
     struct Donation {
         address donor;
-        string campaignId;
         uint256 amount;
         uint256 timestamp;
         string purpose;
     }
 
-    // Array to store all donations
-    Donation[] public donations;
+    // Struct to store expense details
+    struct Expense {
+        uint256 amount;
+        uint256 timestamp;
+        string purpose;
+    }
 
-    // Event to log donations
-    event DonationRecorded(
-        address indexed donor,
-        string campaignId,
-        uint256 amount,
-        uint256 timestamp,
-        string purpose
-    );
+    // Mappings
+    mapping(string => Campaign) public campaigns;
+    mapping(string => Donation[]) public campaignDonations;
+    mapping(string => Expense[]) public campaignExpenses;
+
+    // Events
+    event CampaignCreated(string campaignId, address indexed organizer);
+    event DonationRecorded(address indexed donor, string campaignId, uint256 amount, uint256 timestamp, string purpose);
+    event ExpenseAdded(string campaignId, uint256 amount, uint256 timestamp, string purpose);
+
+    // Function to create a campaign
+    function createCampaign(
+        string memory _campaignId,
+        string memory _title,
+        string memory _description,
+        uint256 _goalAmount,
+        uint256 _endTime
+    ) public {
+        require(campaigns[_campaignId].goalAmount == 0, "Campaign ID already exists");
+        require(_goalAmount > 0, "Goal amount must be greater than zero");
+        require(_endTime > block.timestamp, "End time must be in the future");
+
+        campaigns[_campaignId] = Campaign({
+            campaignId: _campaignId,
+            title: _title,
+            description: _description,
+            organizer: msg.sender,
+            goalAmount: _goalAmount,
+            raisedAmount: 0,
+            startTime: block.timestamp,
+            endTime: _endTime,
+            completed: false
+        });
+
+        emit CampaignCreated(_campaignId, msg.sender);
+    }
 
     // Function to record a donation
     function recordDonation(
         string memory _campaignId,
         uint256 _amount,
         string memory _purpose
-    ) public {
-        // Add the donation to the donations array
-        donations.push(Donation({
+    ) public payable {
+        require(campaigns[_campaignId].goalAmount > 0, "Invalid campaign ID");
+        require(block.timestamp <= campaigns[_campaignId].endTime, "Campaign has ended");
+        require(!campaigns[_campaignId].completed, "Campaign is completed");
+        require(msg.value == _amount, "Donation amount mismatch");
+
+        campaigns[_campaignId].raisedAmount += _amount;
+
+        if (campaigns[_campaignId].raisedAmount >= campaigns[_campaignId].goalAmount) {
+            campaigns[_campaignId].completed = true;
+        }
+
+        campaignDonations[_campaignId].push(Donation({
             donor: msg.sender,
-            campaignId: _campaignId,
             amount: _amount,
             timestamp: block.timestamp,
             purpose: _purpose
         }));
 
-        // Emit an event to log the donation
-        emit DonationRecorded(
-            msg.sender, 
-            _campaignId, 
-            _amount, 
-            block.timestamp, 
-            _purpose
-        );
+        emit DonationRecorded(msg.sender, _campaignId, _amount, block.timestamp, _purpose);
     }
 
-    // Function to get all donations
-    function getDonations() public view returns (Donation[] memory) {
-        return donations;
+    // Function to add an expense
+    function addExpense(
+        string memory _campaignId,
+        uint256 _amount,
+        string memory _purpose
+    ) public {
+        require(msg.sender == campaigns[_campaignId].organizer, "Only organizer can add expenses");
+        require(campaigns[_campaignId].raisedAmount >= _amount, "Insufficient funds");
+
+        campaigns[_campaignId].raisedAmount -= _amount;
+
+        campaignExpenses[_campaignId].push(Expense({
+            amount: _amount,
+            timestamp: block.timestamp,
+            purpose: _purpose
+        }));
+
+        emit ExpenseAdded(_campaignId, _amount, block.timestamp, _purpose);
     }
 
-    // Function to get donations by donor address
-    function getDonationsByDonor(address _donor) public view returns (Donation[] memory) {
-        uint256 count = 0;
-        
-        // Count donations by the specified donor
-        for (uint256 i = 0; i < donations.length; i++) {
-            if (donations[i].donor == _donor) {
-                count++;
-            }
-        }
+    // Function to withdraw funds
+    function withdrawFunds(string memory _campaignId) public {
+        require(msg.sender == campaigns[_campaignId].organizer, "Only organizer can withdraw");
+        require(campaigns[_campaignId].completed, "Campaign is not completed");
 
-        // Create a new array to store the filtered donations
-        Donation[] memory result = new Donation[](count);
-        uint256 index = 0;
+        uint256 balance = campaigns[_campaignId].raisedAmount;
+        campaigns[_campaignId].raisedAmount = 0;
 
-        // Add the donations from the specified donor to the result array
-        for (uint256 i = 0; i < donations.length; i++) {
-            if (donations[i].donor == _donor) {
-                result[index] = donations[i];
-                index++;
-            }
-        }
+        (bool success, ) = msg.sender.call{value: balance}("");
+        require(success, "Transfer failed");
+    }
 
-        return result;
+    // Function to get all donations for a campaign
+    function getDonations(string memory _campaignId) public view returns (Donation[] memory) {
+        return campaignDonations[_campaignId];
+    }
+
+    // Function to get all expenses for a campaign
+    function getExpenses(string memory _campaignId) public view returns (Expense[] memory) {
+        return campaignExpenses[_campaignId];
     }
 }
 
 
 
-//Hello bhai mera naam shubham hai
