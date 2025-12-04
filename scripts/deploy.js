@@ -1,24 +1,3 @@
-// async function main() {
-//     // Get the contract factory
-//     const CharityTracker = await ethers.getContractFactory("CharityTracker");
-    
-//     // Deploy the contract
-//     const charityTracker = await CharityTracker.deploy();
-    
-//     // Wait for deployment to complete
-//     await charityTracker.deployed();
-    
-//     console.log("CharityTracker deployed to:", charityTracker.address);
-//   }
-  
-//   // Execute deployment
-//   main()
-//     .then(() => process.exit(0))
-//     .catch((error) => {
-//       console.error(error);
-//       process.exit(1);
-//     });
-
 
 const { ethers } = require("hardhat");
 
